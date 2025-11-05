@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
-const socketIo = require("socket.io");
+const { Server } = require("socket.io");
 const sequelize = require("./config/database");
 const cors = require("cors");
 
@@ -17,12 +17,12 @@ const docRoutes = require("./routes/documents");
 const app = express();
 const server = http.createServer(app);
 
-// Enable CORS for HTTP routes
+// Enable CORS for all origins
 app.use(
   cors({
-    origin: "http://localhost:5173", // frontend URL
+    origin: "*",
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true,
+    credentials: true, // Note: credentials=true is ignored with origin="*"
   })
 );
 
@@ -33,8 +33,8 @@ app.use(express.json());
 app.use("/api/auth", authRoutes);
 app.use("/api/documents", docRoutes);
 
-// WebSocket setup (CORS already set here)
-const io = socketIo(server, {
+// WebSocket setup (allow all origins)
+const io = new Server(server, {
   cors: {
     origin: "*",
     methods: ["GET", "POST"],
@@ -49,8 +49,13 @@ app.use((req, res) => {
 
 // Start server after DB sync
 const PORT = process.env.PORT || 3000;
-sequelize.sync().then(() => {
-  server.listen(PORT, () =>
-    console.log(`🚀 Server running at http://localhost:${PORT}`)
-  );
-});
+sequelize
+  .sync()
+  .then(() => {
+    server.listen(PORT, () => {
+      console.log(`🚀 Server running at http://localhost:${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("❌ Failed to sync database:", err);
+  });
