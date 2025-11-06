@@ -17,28 +17,23 @@ const docRoutes = require("./routes/documents");
 const app = express();
 const server = http.createServer(app);
 
-// Enable CORS for all origins
+// Enable CORS
 app.use(
   cors({
     origin: "*",
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    credentials: true, // Note: credentials=true is ignored with origin="*"
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true,
   })
 );
-
-// Middleware
 app.use(express.json());
 
 // Routes
 app.use("/api/auth", authRoutes);
 app.use("/api/documents", docRoutes);
 
-// WebSocket setup (allow all origins)
+// WebSocket setup
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
-  },
+  cors: { origin: "*", methods: ["GET", "POST"] },
 });
 require("./websockets")(io);
 
@@ -50,7 +45,7 @@ app.use((req, res) => {
 // Start server after DB sync
 const PORT = process.env.PORT || 3000;
 sequelize
-  .sync()
+  .sync({ force: true }) // ⚠️ Dev only: recreates tables with correct columns
   .then(() => {
     server.listen(PORT, () => {
       console.log(`🚀 Server running at http://localhost:${PORT}`);

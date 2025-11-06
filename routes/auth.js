@@ -1,39 +1,55 @@
 const express = require("express");
+const router = express.Router();
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+
 const User = require("../models/User");
 const auth = require("../middleware/auth");
-const router = express.Router();
 
 // Register
 router.post("/register", async (req, res) => {
-  const { username, password, role } = req.body;
+  const { email, password, role } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ error: "Missing fields" });
+
   try {
-    const hash = await bcrypt.hash(password, 10);
-    const user = await User.create({ username, password: hash, role });
-    res.status(201).json({ message: "User registered successfully" });
+    const existingUser = await User.findOne({ where: { email } });
+    if (existingUser)
+      return res.status(400).json({ error: "Email already registered" });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = await User.create({ email, password: hashedPassword, role });
+
+    const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
+      expiresIn: "1d",
+    });
+    res.status(201).json({ token });
   } catch (err) {
-    res
-      .status(400)
-      .json({ error: "Registration failed", details: err.message });
+    console.error("Register error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
 // Login
 router.post("/login", async (req, res) => {
-  const { username, password } = req.body;
+  const { email, password } = req.body;
+  if (!email || !password)
+    return res.status(400).json({ error: "Missing fields" });
+
   try {
-    const user = await User.findOne({ where: { username } });
-    if (!user || !(await bcrypt.compare(password, user.password))) {
-      return res.status(401).json({ error: "Invalid username or password" });
-    }
+    const user = await User.findOne({ where: { email } });
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return res.status(400).json({ error: "Invalid password" });
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-      expiresIn: "1h",
+      expiresIn: "1d",
     });
     res.json({ token });
   } catch (err) {
-    res.status(500).json({ error: "Login failed", details: err.message });
+    console.error("Login error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 
@@ -41,11 +57,13 @@ router.post("/login", async (req, res) => {
 router.get("/me", auth, async (req, res) => {
   try {
     const user = await User.findByPk(req.user.id, {
-      attributes: ["id", "username", "role"],
+      attributes: ["id", "email", "role"],
     });
+    if (!user) return res.status(404).json({ error: "User not found" });
     res.json(user);
   } catch (err) {
-    res.status(500).json({ error: "Failed to fetch user" });
+    console.error("Fetch user error:", err);
+    res.status(500).json({ error: err.message });
   }
 });
 

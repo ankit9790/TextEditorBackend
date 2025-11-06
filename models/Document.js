@@ -1,13 +1,16 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
-const User = require("./User");
+const { v4: uuidv4 } = require("uuid");
 
 const Document = sequelize.define("Document", {
-  title: DataTypes.STRING,
-  content: DataTypes.TEXT,
+  title: { type: DataTypes.STRING, allowNull: false },
+  content: { type: DataTypes.TEXT },
+  docId: {
+    type: DataTypes.STRING,
+    unique: true,
+    defaultValue: () => uuidv4(),
+  },
+  ownerId: { type: DataTypes.INTEGER },
 });
-
-Document.belongsTo(User, { as: "owner" });
-Document.belongsToMany(User, { through: "DocumentShares", as: "sharedWith" });
 
 module.exports = Document;
