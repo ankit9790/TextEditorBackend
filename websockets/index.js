@@ -1,32 +1,40 @@
 module.exports = (io) => {
-  // Import models once at the top
   const Document = require("../models/Document");
-  const User = require("../models/User");
-  const DocumentShare = require("../models/DocumentShare");
 
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
+    // Join a document room using internal id
     socket.on("join-document", async (docId) => {
-      socket.join(docId);
-      console.log(`User ${socket.id} joined document ${docId}`);
-
-      // ✅ Send existing content to client when they join
       try {
+        // Find document by internal id
         const doc = await Document.findByPk(docId);
-        const content = doc?.content || "";
-        socket.emit("load-document", content);
+        if (!doc) {
+          socket.emit("load-document", "");
+          return console.error(`Document ${docId} not found`);
+        }
+
+        // Join room using internal id
+        socket.join(doc.id);
+        console.log(`User ${socket.id} joined document room ${doc.id}`);
+
+        // Send current content to this user
+        socket.emit("load-document", doc.content || "");
+
+        // Notify others in the room (optional)
+        socket.to(doc.id).emit("user-joined", { userId: socket.id });
       } catch (err) {
-        console.error("Error loading document:", err.message);
+        console.error("Error joining document:", err.message);
         socket.emit("load-document", "");
       }
     });
 
+    // Broadcast text changes to others in the same room
     socket.on("text-change", ({ docId, content }) => {
-      // ✅ Broadcast only to others
       socket.to(docId).emit("receive-changes", content);
     });
 
+    // Save document content to DB
     socket.on("save-document", async ({ docId, content }) => {
       try {
         await Document.update({ content }, { where: { id: docId } });

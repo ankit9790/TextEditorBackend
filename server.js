@@ -42,10 +42,10 @@ app.use((req, res) => {
   res.status(404).send(`Cannot ${req.method} ${req.originalUrl}`);
 });
 
-// Start server after DB sync
+// ✅ Start server after DB sync (NO DATA LOSS)
 const PORT = process.env.PORT || 3000;
 sequelize
-  .sync({ force: true }) // ⚠️ Dev only: recreates tables with correct columns
+  .sync({ alter: true }) // ✅ Adjusts tables if needed (keeps data)
   .then(() => {
     server.listen(PORT, () => {
       console.log(`🚀 Server running at http://localhost:${PORT}`);

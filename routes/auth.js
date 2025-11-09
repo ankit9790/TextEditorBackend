@@ -21,9 +21,13 @@ router.post("/register", async (req, res) => {
     const user = await User.create({ email, password: hashedPassword, role });
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-      expiresIn: "1d",
+      expiresIn: "7d",
     });
-    res.status(201).json({ token });
+
+    res.status(201).json({
+      token,
+      user: { id: user.id, email: user.email, role: user.role },
+    });
   } catch (err) {
     console.error("Register error:", err);
     res.status(500).json({ error: err.message });
@@ -44,9 +48,13 @@ router.post("/login", async (req, res) => {
     if (!valid) return res.status(400).json({ error: "Invalid password" });
 
     const token = jwt.sign({ id: user.id }, process.env.JWT_SECRET, {
-      expiresIn: "1d",
+      expiresIn: "7d",
     });
-    res.json({ token });
+
+    res.json({
+      token,
+      user: { id: user.id, email: user.email, role: user.role },
+    });
   } catch (err) {
     console.error("Login error:", err);
     res.status(500).json({ error: err.message });

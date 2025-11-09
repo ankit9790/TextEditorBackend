@@ -1,7 +1,6 @@
 require("dotenv").config();
 const { Sequelize } = require("sequelize");
 
-// Initialize Sequelize with Neon Serverless Database
 const sequelize = new Sequelize(process.env.DATABASE_URL, {
   dialect: "postgres",
   protocol: "postgres",
@@ -11,13 +10,28 @@ const sequelize = new Sequelize(process.env.DATABASE_URL, {
       rejectUnauthorized: false, // Required for Neon Serverless
     },
   },
-  logging: false, // Disable SQL query logging (set true if needed)
+  logging: false,
   pool: {
-    max: 5, // Maximum number of connections
-    min: 0, // Minimum number of connections
-    acquire: 30000, // Maximum time in ms that pool will try to get connection before throwing error
-    idle: 10000, // Maximum time in ms that a connection can be idle before being released
+    max: 5,
+    min: 0,
+    acquire: 30000,
+    idle: 10000,
   },
 });
+
+async function connectDB() {
+  try {
+    await sequelize.authenticate();
+    console.log("✅ Connected to Neon Database Successfully");
+
+    // Auto-create tables if not exist (NO DATA LOSS)
+    await sequelize.sync({ alter: true });
+    console.log("🧩 Models synchronized (tables updated if needed)");
+  } catch (error) {
+    console.error("❌ Database Connection Error:", error.message);
+  }
+}
+
+connectDB();
 
 module.exports = sequelize;
