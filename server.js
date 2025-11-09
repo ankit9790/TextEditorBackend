@@ -1,4 +1,5 @@
 // server.js
+// Deployment-ready Express + Socket.IO server tuned for Render
 require("dotenv").config();
 const express = require("express");
 const http = require("http");
@@ -6,47 +7,51 @@ const { Server } = require("socket.io");
 const sequelize = require("./config/database");
 const cors = require("cors");
 
-// Ensure models are registered with Sequelize
+// ensure models registered
 require("./models/User");
 require("./models/Document");
 require("./models/DocumentShare");
 
-// API routes
+// routes
 const authRoutes = require("./routes/auth");
 const docRoutes = require("./routes/documents");
 
 const app = express();
 const server = http.createServer(app);
 
-// CORS: allow local dev origin and deployed frontend origin(s).
-// In production you may restrict this to your Vercel origin only.
+// CORS: allow local dev and deployed frontend (tighten in prod by setting FRONTEND_ORIGIN env on Render)
+const allowedOrigins = [
+  "http://localhost:5173",
+  process.env.FRONTEND_ORIGIN || "*", // set FRONTEND_ORIGIN on Render to tighten CORS
+];
+
 app.use(
   cors({
-    origin: ["http://localhost:5173", process.env.FRONTEND_ORIGIN || "*"],
+    origin: allowedOrigins,
     methods: ["GET", "POST", "PUT", "DELETE"],
     credentials: true,
   })
 );
 app.use(express.json());
 
-// mount APIs
+// mount API endpoints
 app.use("/api/auth", authRoutes);
 app.use("/api/documents", docRoutes);
 
-// Socket.IO configuration tuned for cloud deployment (Render)
+// Socket.IO configuration (tuned for cloud)
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:5173", process.env.FRONTEND_ORIGIN || "*"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
   },
-  // keepalive tuning to reduce surprise disconnects on proxies
+  // helpful for cloud deployments and proxies
   pingInterval: 25000,
   pingTimeout: 60000,
-  maxHttpBufferSize: 1e7,
+  maxHttpBufferSize: 1e7, // accept larger messages (editor HTML)
   allowEIO3: true,
 });
 
-// attach websocket handlers (modular)
+// attach websockets logic (in separate file)
 require("./websockets")(io);
 
 // 404 fallback
@@ -54,17 +59,13 @@ app.use((req, res) => {
   res.status(404).send(`Cannot ${req.method} ${req.originalUrl}`);
 });
 
-// Start server after syncing DB models
+// start after DB sync to ensure tables ready
 const PORT = process.env.PORT || 3000;
 sequelize
   .sync({ alter: true })
   .then(() => {
     server.listen(PORT, () => {
-      console.log(
-        `🚀 Server running at ${
-          PORT === 3000 ? `http://localhost:${PORT}` : `0.0.0.0:${PORT}`
-        }`
-      );
+      console.log(`🚀 Server running on port ${PORT}`);
       console.log("Socket.IO ready");
     });
   })

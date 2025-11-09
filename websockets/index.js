@@ -1,75 +1,75 @@
 // websockets/index.js
+// Robust Socket.IO handler: resolves docId or numeric id and uses internal id as room key
 module.exports = (io) => {
   const Document = require("../models/Document");
 
   io.on("connection", (socket) => {
     console.log("User connected:", socket.id);
 
-    // Resolve joinIdentifier (internal id or docId) -> { doc, roomId }
+    // Resolve a join identifier (internal numeric id or docId string) to a document and roomId
     async function resolveToRoom(joinIdentifier) {
       if (!joinIdentifier && joinIdentifier !== 0) return null;
 
-      // Try numeric internal id first
+      // Try numeric primary key first
       const asNumber = Number(joinIdentifier);
       if (!Number.isNaN(asNumber) && Number.isFinite(asNumber)) {
-        const byPk = await Document.findByPk(asNumber);
-        if (byPk) return { doc: byPk, roomId: String(byPk.id) };
+        const docByPk = await Document.findByPk(asNumber);
+        if (docByPk) return { doc: docByPk, roomId: String(docByPk.id) };
       }
 
-      // Fallback: docId string (UUID or owner-supplied)
-      const byDocId = await Document.findOne({
+      // Fallback: treat as docId string (UUID or owner-provided)
+      const docByDocId = await Document.findOne({
         where: { docId: String(joinIdentifier).trim() },
       });
-      if (byDocId) return { doc: byDocId, roomId: String(byDocId.id) };
+      if (docByDocId) return { doc: docByDocId, roomId: String(docByDocId.id) };
 
       return null;
     }
 
-    // Support either event name for compatibility
+    // Support both 'join-document' and 'join-room' events for compatibility
     const joinEvents = ["join-document", "join-room"];
     joinEvents.forEach((evt) => {
       socket.on(evt, async (joinIdentifier) => {
         try {
           const resolved = await resolveToRoom(joinIdentifier);
           if (!resolved) {
-            // If not found, tell this client to show empty state (or error)
-            socket.emit("load-document", "");
+            socket.emit("load-document", ""); // inform client nothing found
             console.log(`Join failed for identifier: ${joinIdentifier}`);
             return;
           }
 
           const { doc, roomId } = resolved;
 
-          // Leave other document rooms to avoid being in multiple document rooms
+          // Ensure socket leaves other document rooms (prevent multiple-document leakage)
           try {
             const rooms = Array.from(socket.rooms || []);
             for (const r of rooms) {
               if (r !== socket.id && r !== roomId) socket.leave(r);
             }
           } catch (e) {
-            /* ignore */
+            // ignore
           }
 
-          // Join room using internal id (string). This ensures uniform room key.
+          // Join the room by internal id (string) — this is the authoritative room key
           socket.join(roomId);
           console.log(
             `Socket ${socket.id} joined room ${roomId} (docId: ${doc.docId})`
           );
 
-          // Send the current document content only to this client
+          // Send current content only to this newly joined socket
           socket.emit("load-document", doc.content || "");
 
-          // Notify others (optional)
+          // Notify other members (optional)
           socket.to(roomId).emit("user-joined", { socketId: socket.id });
         } catch (err) {
-          console.error("Error in join handler:", err);
+          console.error("Join handler error:", err);
           socket.emit("load-document", "");
         }
       });
     });
 
-    // Broadcast incoming text changes to others in the room
-    // Accepts payload.roomId (preferred) or payload.docId (compat)
+    // Broadcast text changes to everyone else in the room.
+    // Accepts { roomId: <internal id>, content } or { docId: <docId>, content } for compatibility
     socket.on("text-change", (payload) => {
       try {
         if (!payload) return;
@@ -82,7 +82,7 @@ module.exports = (io) => {
       }
     });
 
-    // Persist saved content to DB. Expects numeric internal id (roomId)
+    // Persist content to DB — expects numeric internal id in roomId
     socket.on("save-document", async (payload) => {
       try {
         if (!payload) return;

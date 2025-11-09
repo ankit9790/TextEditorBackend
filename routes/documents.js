@@ -6,7 +6,7 @@ const auth = require("../middleware/auth");
 const router = express.Router();
 router.use(auth);
 
-// Get all documents owned by user
+// Get documents owned by user
 router.get("/", async (req, res) => {
   try {
     const docs = await Document.findAll({ where: { ownerId: req.user.id } });
@@ -16,7 +16,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Join by docId (shareable ID) -> returns full doc (including internal id)
+// Join by docId (returns full document including internal id)
 router.get("/join/:docId", async (req, res) => {
   try {
     const doc = await Document.findOne({ where: { docId: req.params.docId } });
@@ -38,7 +38,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Create (owner may supply docId)
+// Create new document
 router.post("/", async (req, res) => {
   const { title, content, docId } = req.body;
   if (!title?.trim())
@@ -63,7 +63,7 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Update content (any authenticated user can update content)
+// Update content (owner or collaborator)
 router.put("/:id", async (req, res) => {
   try {
     const doc = await Document.findByPk(req.params.id);
@@ -71,7 +71,6 @@ router.put("/:id", async (req, res) => {
 
     const { content, title } = req.body;
     if (content !== undefined) doc.content = content;
-    // Title changes should be owner-only
     if (title !== undefined && req.user.id === doc.ownerId) doc.title = title;
 
     await doc.save();
