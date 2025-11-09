@@ -1,4 +1,3 @@
-// routes/documents.js
 const express = require("express");
 const Document = require("../models/Document");
 const auth = require("../middleware/auth");
@@ -6,7 +5,7 @@ const auth = require("../middleware/auth");
 const router = express.Router();
 router.use(auth);
 
-// Get documents owned by user
+// Get all documents owned by user
 router.get("/", async (req, res) => {
   try {
     const docs = await Document.findAll({ where: { ownerId: req.user.id } });
@@ -16,18 +15,20 @@ router.get("/", async (req, res) => {
   }
 });
 
-// Join by docId (returns full document including internal id)
+// Get document by docId (for joining)
 router.get("/join/:docId", async (req, res) => {
   try {
     const doc = await Document.findOne({ where: { docId: req.params.docId } });
     if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    // Return full document including internal id
     res.json(doc);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// Get by internal id
+// Get document by internal ID
 router.get("/:id", async (req, res) => {
   try {
     const doc = await Document.findByPk(req.params.id);
@@ -38,15 +39,17 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Create new document
+// Create new document (owner can provide docId)
 router.post("/", async (req, res) => {
   const { title, content, docId } = req.body;
   if (!title?.trim())
     return res.status(400).json({ error: "Title is required" });
+
   try {
     const existingDoc = docId
       ? await Document.findOne({ where: { docId } })
       : null;
+
     if (existingDoc)
       return res.status(400).json({ error: "Document ID already exists" });
 
@@ -63,28 +66,12 @@ router.post("/", async (req, res) => {
   }
 });
 
-// Update content (owner or collaborator)
-router.put("/:id", async (req, res) => {
-  try {
-    const doc = await Document.findByPk(req.params.id);
-    if (!doc) return res.status(404).json({ error: "Document not found" });
-
-    const { content, title } = req.body;
-    if (content !== undefined) doc.content = content;
-    if (title !== undefined && req.user.id === doc.ownerId) doc.title = title;
-
-    await doc.save();
-    res.json(doc);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Delete (owner only)
+// Delete document (ONLY owner can delete)
 router.delete("/:id", async (req, res) => {
   try {
     const doc = await Document.findByPk(req.params.id);
     if (!doc) return res.status(404).json({ error: "Document not found" });
+
     if (doc.ownerId !== req.user.id)
       return res
         .status(403)
@@ -92,6 +79,24 @@ router.delete("/:id", async (req, res) => {
 
     await doc.destroy();
     res.json({ message: "Deleted" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Update document content (owner or friend can edit)
+router.put("/:id", async (req, res) => {
+  try {
+    const doc = await Document.findByPk(req.params.id);
+    if (!doc) return res.status(404).json({ error: "Document not found" });
+
+    const { content } = req.body;
+    if (content === undefined)
+      return res.status(400).json({ error: "Content is required" });
+
+    // Allow anyone to update content (owner or friend)
+    await doc.update({ content });
+    res.json(doc);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

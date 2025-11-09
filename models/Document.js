@@ -1,4 +1,3 @@
-// models/Document.js
 const { DataTypes } = require("sequelize");
 const sequelize = require("../config/database");
 const { v4: uuidv4 } = require("uuid");
@@ -10,7 +9,7 @@ const Document = sequelize.define("Document", {
     type: DataTypes.STRING,
     unique: true,
     allowNull: false,
-    defaultValue: () => uuidv4(), // generated if owner doesn't provide one
+    defaultValue: () => uuidv4(), // Generate UUID if owner doesn't provide
   },
   ownerId: { type: DataTypes.INTEGER, allowNull: false },
 });
